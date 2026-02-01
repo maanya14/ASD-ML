@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 
 # ==============================
@@ -49,9 +49,9 @@ X_train = scaler.fit_transform(X_train)
 X_val = scaler.transform(X_val)
 
 # ==============================
-# TRAIN MODEL
+# TRAIN XGBOOST
 # ==============================
-model = XGBClassifier(
+xgb_model = XGBClassifier(
     n_estimators=300,
     max_depth=6,
     learning_rate=0.05,
@@ -61,26 +61,63 @@ model = XGBClassifier(
     random_state=42
 )
 
-model.fit(X_train, y_train)
+xgb_model.fit(X_train, y_train)
+
+xgb_val_probs = xgb_model.predict_proba(X_val)[:, 1]
+xgb_auc = roc_auc_score(y_val, xgb_val_probs)
 
 # ==============================
-# VALIDATION PROBABILITIES
+# TRAIN RANDOM FOREST
 # ==============================
-val_probs = model.predict_proba(X_val)[:, 1]
+rf_model = RandomForestClassifier(
+    n_estimators=300,
+    max_depth=12,
+    min_samples_split=5,
+    min_samples_leaf=3,
+    random_state=42,
+    n_jobs=-1
+)
 
-print("Validation ROC-AUC:",
-      roc_auc_score(y_val, val_probs))
+rf_model.fit(X_train, y_train)
+
+rf_val_probs = rf_model.predict_proba(X_val)[:, 1]
+rf_auc = roc_auc_score(y_val, rf_val_probs)
 
 # ==============================
-# AUTO-LEARN THRESHOLDS
+# MODEL COMPARISON
+# ==============================
+print("\nMODEL PERFORMANCE COMPARISON")
+print("-----------------------------")
+print(f"XGBoost ROC-AUC      : {xgb_auc:.4f}")
+print(f"Random Forest ROC-AUC: {rf_auc:.4f}")
+
+# ==============================
+# ROC CURVE VISUALIZATION
+# ==============================
+xgb_fpr, xgb_tpr, _ = roc_curve(y_val, xgb_val_probs)
+rf_fpr, rf_tpr, _ = roc_curve(y_val, rf_val_probs)
+
+plt.figure(figsize=(8, 6))
+plt.plot(xgb_fpr, xgb_tpr, label=f"XGBoost (AUC = {xgb_auc:.3f})")
+plt.plot(rf_fpr, rf_tpr, label=f"Random Forest (AUC = {rf_auc:.3f})")
+plt.plot([0, 1], [0, 1], linestyle="--")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve Comparison")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# ==============================
+# AUTO-LEARN THRESHOLDS (XGBOOST)
 # ==============================
 thresholds = {
-    "low": np.percentile(val_probs, 33),
-    "moderate": np.percentile(val_probs, 66),
-    "severe": np.percentile(val_probs, 85)
+    "low": np.percentile(xgb_val_probs, 33),
+    "moderate": np.percentile(xgb_val_probs, 66),
+    "severe": np.percentile(xgb_val_probs, 85)
 }
 
-print("\nLearned thresholds:")
+print("\nXGBoost Learned Thresholds:")
 for k, v in thresholds.items():
     print(f"{k}: {v:.3f}")
 
@@ -101,11 +138,10 @@ def assign_overload_level(p, th):
 # APPLY TO VALIDATION DATA
 # ==============================
 val_df = df.iloc[val_idx].copy()
-val_df["overload_probability"] = val_probs
+val_df["overload_probability"] = xgb_val_probs
 val_df["overload_level"] = val_df["overload_probability"].apply(
     lambda p: assign_overload_level(p, thresholds)
 )
-
 
 # ==============================
 # SAVE COMPACT TIMELINE DATA
@@ -128,62 +164,3 @@ compact_df.to_csv(
 print("\nCompact timeline file saved.")
 print(compact_df.head())
 print("Shape:", compact_df.shape)
-
-
-#GRAPH PLOTS
-
-# # LOAD COMPACT DATA
-# # ==============================
-# df = pd.read_csv("WESAD_OVERLOAD_RESULTS.csv")
-
-# # ==============================
-# # COLOR MAP FOR OVERLOAD LEVELS
-# # ==============================
-# level_colors = {
-#     "Low": "green",
-#     "Moderate": "orange",
-#     "High": "red",
-#     "Severe": "darkred"
-# }
-
-# # ==============================
-# # PLOT PER SUBJECT
-# # ==============================
-# subjects = df["subject_id"].unique()
-
-# for subject in subjects:
-#     sub_df = df[df["subject_id"] == subject]
-
-#     plt.figure(figsize=(12, 4))
-
-#     # Plot overload probability
-#     for level, color in level_colors.items():
-#         mask = sub_df["overload_level"] == level
-#         plt.scatter(
-#             sub_df.loc[mask, "center_time_sec"],
-#             sub_df.loc[mask, "overload_probability"],
-#             label=level,
-#             color=color,
-#             s=30
-#         )
-
-#     # Optional: Ground truth shading
-#     stress_mask = sub_df["label"] == 1
-#     plt.fill_between(
-#         sub_df["center_time_sec"],
-#         0, 1,
-#         where=stress_mask,
-#         color="gray",
-#         alpha=0.15,
-#         label="Ground Truth Stress"
-#     )
-
-#     plt.title(f"Subject {subject} – Sensory Overload Timeline")
-#     plt.xlabel("Time (seconds)")
-#     plt.ylabel("Overload Probability")
-#     plt.ylim(0, 1)
-#     plt.legend()
-#     plt.grid(True)
-
-#     plt.tight_layout()
-#     plt.show()
