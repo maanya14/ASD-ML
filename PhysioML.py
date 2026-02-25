@@ -5,7 +5,12 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, roc_curve
-from sklearn.ensemble import RandomForestClassifier
+
+# Models
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
 
 # ==============================
@@ -49,75 +54,92 @@ X_train = scaler.fit_transform(X_train)
 X_val = scaler.transform(X_val)
 
 # ==============================
-# TRAIN XGBOOST
+# DEFINE MODELS
 # ==============================
-xgb_model = XGBClassifier(
-    n_estimators=300,
-    max_depth=6,
-    learning_rate=0.05,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    eval_metric="logloss",
-    random_state=42
-)
-
-xgb_model.fit(X_train, y_train)
-
-xgb_val_probs = xgb_model.predict_proba(X_val)[:, 1]
-xgb_auc = roc_auc_score(y_val, xgb_val_probs)
-
-# ==============================
-# TRAIN RANDOM FOREST
-# ==============================
-rf_model = RandomForestClassifier(
-    n_estimators=300,
-    max_depth=12,
-    min_samples_split=5,
-    min_samples_leaf=3,
-    random_state=42,
-    n_jobs=-1
-)
-
-rf_model.fit(X_train, y_train)
-
-rf_val_probs = rf_model.predict_proba(X_val)[:, 1]
-rf_auc = roc_auc_score(y_val, rf_val_probs)
+models = {
+    "Logistic Regression": LogisticRegression(max_iter=1000),
+    "SVM (RBF)": SVC(kernel='rbf', probability=True),
+    "KNN": KNeighborsClassifier(n_neighbors=7),
+    "Gradient Boosting": GradientBoostingClassifier(),
+    "Random Forest": RandomForestClassifier(
+        n_estimators=300,
+        max_depth=12,
+        min_samples_split=5,
+        min_samples_leaf=3,
+        random_state=42,
+        n_jobs=-1
+    ),
+    "XGBoost": XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        eval_metric="logloss",
+        random_state=42
+    )
+}
 
 # ==============================
-# MODEL COMPARISON
+# TRAIN & EVALUATE MODELS
+# ==============================
+results = {}
+probabilities = {}
+roc_data = {}
+
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    probs = model.predict_proba(X_val)[:, 1]
+    auc = roc_auc_score(y_val, probs)
+
+    results[name] = auc
+    probabilities[name] = probs
+    roc_data[name] = roc_curve(y_val, probs)
+
+# ==============================
+# PRINT MODEL COMPARISON
 # ==============================
 print("\nMODEL PERFORMANCE COMPARISON")
-print("-----------------------------")
-print(f"XGBoost ROC-AUC      : {xgb_auc:.4f}")
-print(f"Random Forest ROC-AUC: {rf_auc:.4f}")
+print("----------------------------------")
+
+sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
+
+for name, auc in sorted_results:
+    print(f"{name:<20} : ROC-AUC = {auc:.4f}")
+
+# Best Model
+best_model_name = sorted_results[0][0]
+best_probs = probabilities[best_model_name]
+
+print(f"\nBest Performing Model: {best_model_name}")
 
 # ==============================
 # ROC CURVE VISUALIZATION
 # ==============================
-xgb_fpr, xgb_tpr, _ = roc_curve(y_val, xgb_val_probs)
-rf_fpr, rf_tpr, _ = roc_curve(y_val, rf_val_probs)
-
 plt.figure(figsize=(8, 6))
-plt.plot(xgb_fpr, xgb_tpr, label=f"XGBoost (AUC = {xgb_auc:.3f})")
-plt.plot(rf_fpr, rf_tpr, label=f"Random Forest (AUC = {rf_auc:.3f})")
+
+for name in results:
+    fpr, tpr, _ = roc_data[name]
+    plt.plot(fpr, tpr, label=f"{name} (AUC = {results[name]:.3f})")
+
 plt.plot([0, 1], [0, 1], linestyle="--")
 plt.xlabel("False Positive Rate")
 plt.ylabel("True Positive Rate")
-plt.title("ROC Curve Comparison")
+plt.title("ROC Curve Comparison (All Models)")
 plt.legend()
 plt.grid(True)
 plt.show()
 
 # ==============================
-# AUTO-LEARN THRESHOLDS (XGBOOST)
+# AUTO-LEARN THRESHOLDS (BEST MODEL)
 # ==============================
 thresholds = {
-    "low": np.percentile(xgb_val_probs, 33),
-    "moderate": np.percentile(xgb_val_probs, 66),
-    "severe": np.percentile(xgb_val_probs, 85)
+    "low": np.percentile(best_probs, 33),
+    "moderate": np.percentile(best_probs, 66),
+    "severe": np.percentile(best_probs, 85)
 }
 
-print("\nXGBoost Learned Thresholds:")
+print(f"\n{best_model_name} Learned Thresholds:")
 for k, v in thresholds.items():
     print(f"{k}: {v:.3f}")
 
@@ -138,7 +160,7 @@ def assign_overload_level(p, th):
 # APPLY TO VALIDATION DATA
 # ==============================
 val_df = df.iloc[val_idx].copy()
-val_df["overload_probability"] = xgb_val_probs
+val_df["overload_probability"] = best_probs
 val_df["overload_level"] = val_df["overload_probability"].apply(
     lambda p: assign_overload_level(p, thresholds)
 )
@@ -156,10 +178,7 @@ compact_df = val_df[[
     "label"
 ]]
 
-compact_df.to_csv(
-    "WESAD_OVERLOAD_RESULTS.csv",
-    index=False
-)
+compact_df.to_csv("WESAD_OVERLOAD_RESULTS.csv", index=False)
 
 print("\nCompact timeline file saved.")
 print(compact_df.head())
