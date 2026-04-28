@@ -1,0 +1,24 @@
+# Ignore dataset folder
+Physio Dataset/
+crowd_dataset/
+
+esc50_env/
+AUDIO/esc50_env/
+AUDIO/ESC-50/
+./AUDIO/ESC-50/
+./AUDIO/esc50_env/
+# Ignore pickle files
+*.pkl
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore virtual environments
+venv/
+.env
+.pkl
+
+.pt
+.pth
+video_samples/
