@@ -2,18 +2,18 @@ import torch
 import torch.nn as nn
 
 class AttentionFusion(nn.Module):
-    def __init__(self):
+    def __init__(self, input_dim=5):   # 🔥 updated
         super().__init__()
 
         self.attention = nn.Sequential(
-            nn.Linear(4, 16),
+            nn.Linear(input_dim, 16),   # 5 → 16
             nn.ReLU(),
-            nn.Linear(16, 4),
+            nn.Linear(16, input_dim),   # 16 → 5
             nn.Softmax(dim=1)
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(4, 32),
+            nn.Linear(input_dim, 32),   # 5 → 32
             nn.ReLU(),
             nn.Linear(32, 1),
             nn.Sigmoid()

@@ -1,10 +1,3 @@
-# This script: Trains a neural network to predict a soft visual overload probability based on crowd density and facial discomfort.
-
-# It produces:
-# - overload_prob_model.pth
-# - Which your earlier inference script uses.
-
-
 import pandas as pd
 import numpy as np
 import torch
@@ -22,23 +15,20 @@ feat_cols = [
     "crowd_density_norm",
     "facial_discomfort_prob",
     "audio_overload_score",
-    "physio_stress_prob"
+    "physio_stress_prob",
+    "visual_confusion_prob"
 ]
 
 X = df[feat_cols].values
 
-# Pseudo target (until real labels available)
-Y = (
-    df["crowd_density_norm"] +
-    df["facial_discomfort_prob"] +
-    df["audio_overload_score"] +
-    df["physio_stress_prob"]
-) / 4
-
-Y = (1 / (1 + np.exp(-Y))).values.reshape(-1, 1)
+# -----------------------
+# TARGET
+# -----------------------
+Y = np.mean(X, axis=1)
+Y = (1 / (1 + np.exp(-Y))).reshape(-1, 1)
 
 # -----------------------
-# TORCH DATA
+# TORCH
 # -----------------------
 X_tensor = torch.tensor(X, dtype=torch.float32)
 Y_tensor = torch.tensor(Y, dtype=torch.float32)
@@ -47,16 +37,18 @@ dataset = TensorDataset(X_tensor, Y_tensor)
 loader = DataLoader(dataset, batch_size=64, shuffle=True)
 
 # -----------------------
-# MODEL
+# MODEL (FIXED)
 # -----------------------
-model = AttentionFusion()
+input_dim = X.shape[1]   # 🔥 dynamic
+model = AttentionFusion(input_dim=input_dim)
+
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 # -----------------------
 # TRAIN
 # -----------------------
-EPOCHS = 50
+EPOCHS = 30
 
 for epoch in range(EPOCHS):
     total_loss = 0
@@ -78,4 +70,4 @@ for epoch in range(EPOCHS):
 # SAVE
 # -----------------------
 torch.save(model.state_dict(), "overload_prob_model.pth")
-print("Model saved!")
+print("✅ Model saved!")

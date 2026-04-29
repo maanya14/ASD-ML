@@ -23,27 +23,28 @@ from alert_system import trigger_alert
 from explainability import plot_contributions, plot_overload
 
 # -----------------------
-# LOAD MODEL
-# -----------------------
-model = AttentionFusion()
-model.load_state_dict(torch.load("overload_prob_model.pth"))
-model.eval()
-
-# -----------------------
 # LOAD DATA
 # -----------------------
 df = pd.read_csv("everything_aligned.csv")
 
-features = df[
-    [
-        "crowd_density_norm",
-        "facial_discomfort_prob",
-        "audio_overload_score",
-        "physio_stress_prob"
-    ]
-].values
+feat_cols = [
+    "crowd_density_norm",
+    "facial_discomfort_prob",
+    "audio_overload_score",
+    "physio_stress_prob",
+    "visual_confusion_prob"
+]
 
-X = torch.tensor(features, dtype=torch.float32)
+X = torch.tensor(df[feat_cols].values, dtype=torch.float32)
+
+# -----------------------
+# LOAD MODEL
+# -----------------------
+input_dim = X.shape[1]
+model = AttentionFusion(input_dim=input_dim)
+
+model.load_state_dict(torch.load("overload_prob_model.pth"))
+model.eval()
 
 # -----------------------
 # PREDICT
@@ -70,15 +71,16 @@ def level(p):
 df["overload_level"] = df["overload_probability"].apply(level)
 
 # -----------------------
-# EXPLAINABILITY
+# EXPLAINABILITY (FIXED 5 FEATURES)
 # -----------------------
 df["crowd_weight"] = weights[:, 0]
 df["face_weight"] = weights[:, 1]
 df["audio_weight"] = weights[:, 2]
 df["physio_weight"] = weights[:, 3]
+df["visual_weight"] = weights[:, 4]
 
 # -----------------------
-# ALERT SYSTEM
+# ALERT
 # -----------------------
 for p in df["overload_probability"]:
     trigger_alert(p)
@@ -94,4 +96,4 @@ df.to_csv("multimodal_output.csv", index=False)
 plot_contributions(df)
 plot_overload(df)
 
-print("Prediction complete!")
+print("✅ Prediction complete!")
