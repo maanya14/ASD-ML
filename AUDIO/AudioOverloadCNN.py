@@ -18,7 +18,7 @@ Run:
     python AudioOverloadCNN.py --esc50_root /path/to/ESC-50 --epochs 20 --batch_size 32
 
 Inference:
-    python AudioOverloadCNN.py --mode predict --model_path artifacts/esc50_cnn.pt --audio_file test.wav
+   python AudioOverloadCNN.py --mode predict \ --model_path esc50_cnn.pt \ --meta_path esc50_meta.json \ --esc50_root ESC-50
 """
 
 from __future__ import annotations
@@ -460,33 +460,51 @@ def predict_audio(
         "overload_bucket": risk_bucket(score),
     }
 
-def generate_audio_csv(model_path, meta_path, audio_file, output_length=100):
-    """
-    Generate audio_output.csv for multimodal fusion
-    """
+def generate_audio_csv_from_testset(model_path, meta_path, esc50_root):
+    import os
+    import pandas as pd
 
-    result = predict_audio(
-        model_path=model_path,
-        meta_path=meta_path,
-        audio_file=audio_file
-    )
+    # Load metadata
+    meta_csv = os.path.join(esc50_root, "meta", "esc50.csv")
+    audio_dir = os.path.join(esc50_root, "audio")
 
-    score = result["overload_risk_score"]
+    df_meta = pd.read_csv(meta_csv)
 
-    # Normalize (already 0–1 but safe)
-    score = max(0.0, min(1.0, score))
+    # ✅ Use ONLY test fold (fold = 5)
+    test_df = df_meta[df_meta["fold"] == 5].reset_index(drop=True)
 
-    # Expand to match other modalities length
-    audio_scores = [score] * output_length
+    scores = []
 
-    df = pd.DataFrame({
-        "audio_overload_score": audio_scores
+    print(f"🔍 Predicting on {len(test_df)} test audio files...")
+
+    for i, row in test_df.iterrows():
+        file_path = os.path.join(audio_dir, row["filename"])
+
+        result = predict_audio(
+            model_path=model_path,
+            meta_path=meta_path,
+            audio_file=file_path
+        )
+
+        score = result["overload_risk_score"]
+        score = max(0.0, min(1.0, score))
+
+        scores.append(score)
+
+        if i % 100 == 0:
+            print(f"Processed {i}/{len(test_df)}")
+
+    # -------------------------
+    # SAVE CSV
+    # -------------------------
+    output_df = pd.DataFrame({
+        "audio_overload_score": scores
     })
 
-    df.to_csv("audio_output.csv", index=False)
+    output_df.to_csv("audio_output.csv", index=False)
 
-    print("✅ audio_output.csv generated!")
-    print(f"Audio Score: {score:.3f}")
+    print("✅ audio_output.csv created from ESC-50 test set!")
+    print(f"Total samples: {len(scores)}")
 # ---------------------------
 # CLI
 # ---------------------------
@@ -511,6 +529,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    # ==========================
+    # TRAIN MODE
+    # ==========================
     if args.mode == "train":
         train(
             esc50_root=args.esc50_root,
@@ -521,26 +542,58 @@ def main() -> None:
             seed=args.seed,
         )
 
-    else:
-        if not args.audio_file:
-            raise ValueError("--audio_file is required in predict mode")
+    # ==========================
+    # PREDICT MODE (MULTIMODAL READY)
+    # ==========================
+    elif args.mode == "predict":
 
-        result = predict_audio(
-            model_path=args.model_path,
-            meta_path=args.meta_path,
-            audio_file=args.audio_file,
-            topk=args.topk,
-        )
+        if not args.esc50_root:
+            raise ValueError("--esc50_root is required for predict mode")
 
-        print(json.dumps(result, indent=2))
+        print("🔍 Generating audio_output.csv from ESC-50 test set...")
 
-        # 🔥 NEW: generate CSV for fusion
-        generate_audio_csv(
-            model_path=args.model_path,
-            meta_path=args.meta_path,
-            audio_file=args.audio_file,
-            output_length=100   # match your dataset length
-        )
+        import os
+        import pandas as pd
+
+        meta_csv = os.path.join(args.esc50_root, "meta", "esc50.csv")
+        audio_dir = os.path.join(args.esc50_root, "audio")
+
+        df_meta = pd.read_csv(meta_csv)
+
+        # ✅ Use ONLY fold 5 (test set)
+        test_df = df_meta[df_meta["fold"] == 5].reset_index(drop=True)
+
+        scores = []
+
+        for i, row in test_df.iterrows():
+            file_path = os.path.join(audio_dir, row["filename"])
+
+            result = predict_audio(
+                model_path=args.model_path,
+                meta_path=args.meta_path,
+                audio_file=file_path,
+                topk=args.topk
+            )
+
+            score = result["overload_risk_score"]
+            score = max(0.0, min(1.0, score))
+
+            scores.append(score)
+
+            if i % 50 == 0:
+                print(f"Processed {i}/{len(test_df)}")
+
+        # ==========================
+        # SAVE OUTPUT CSV
+        # ==========================
+        output_df = pd.DataFrame({
+            "audio_overload_score": scores
+        })
+
+        output_df.to_csv("audio_output.csv", index=False)
+
+        print("✅ audio_output.csv created!")
+        print(f"Total samples: {len(scores)}")
 
 
 if __name__ == "__main__":
