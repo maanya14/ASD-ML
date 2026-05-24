@@ -1,0 +1,11 @@
+opencv-python
+librosa
+scikit-learn
+tensorflow
+
+fastapi
+uvicorn
+numpy
+pandas
+pydantic
+python-multipart
