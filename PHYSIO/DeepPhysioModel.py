@@ -279,6 +279,7 @@ plt.ylabel("TPR")
 plt.legend()
 plt.grid()
 plt.show()
+plt.savefig("/PHYSIO/roc_curve.png")
 
 # ==============================
 # ATTENTION VISUALIZATION
@@ -313,10 +314,10 @@ plt.show()
 # ==============================
 # SAVE MODEL
 # ==============================
-torch.save(model.state_dict(), "model.pth")
+#torch.save(model.state_dict(), "model.pth")
 
 # Save normalization values
-np.save("mean.npy", mean)
-np.save("std.npy", std)
+#np.save("mean.npy", mean)
+#np.save("std.npy", std)
 
 print("\nModel and normalization saved!")

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ASD-ML Live Monitor</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="rail" aria-label="System controls">
+        <div class="brand">
+          <div class="mark">AM</div>
+          <div>
+            <h1>ASD-ML</h1>
+            <p>Live overload monitor</p>
+          </div>
+        </div>
+
+        <section class="control-group">
+          <label for="subjectSelect">Physio subject</label>
+          <select id="subjectSelect"></select>
+        </section>
+
+        <section class="control-group">
+          <label for="sampleRate">Analysis cadence</label>
+          <select id="sampleRate">
+            <option value="700">Fast</option>
+            <option value="1000">Balanced</option>
+            <option value="1400">Calm</option>
+          </select>
+        </section>
+
+        <div class="button-row">
+          <button id="startBtn" class="primary" type="button">
+            <span class="icon">▶</span>
+            Start
+          </button>
+          <button id="stopBtn" type="button" disabled>
+            <span class="icon">■</span>
+            Stop
+          </button>
+        </div>
+
+        <section class="status-list" aria-live="polite">
+          <div class="status-item">
+            <span>Camera</span>
+            <strong id="cameraState">Idle</strong>
+          </div>
+          <div class="status-item">
+            <span>Microphone</span>
+            <strong id="micState">Idle</strong>
+          </div>
+          <div class="status-item">
+            <span>API</span>
+            <strong id="apiState">Checking</strong>
+          </div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Multimodal inference</p>
+            <h2>Video, audio, and physio are fused in real time.</h2>
+          </div>
+          <div class="run-meta">
+            <span id="latency">-- ms</span>
+            <span id="framesSeen">0 samples</span>
+          </div>
+        </header>
+
+        <section class="hero-grid">
+          <div class="camera-panel">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="sampleCanvas" width="160" height="90"></canvas>
+            <div class="scan-frame" aria-hidden="true"></div>
+            <div class="video-hud">
+              <span id="videoReadout">Video offline</span>
+              <span id="audioReadout">Audio offline</span>
+            </div>
+          </div>
+
+          <div class="decision-panel">
+            <p class="panel-label">Fusion probability</p>
+            <div class="score-ring" id="scoreRing">
+              <span id="fusionScore">0.00</span>
+              <small id="fusionLevel">Idle</small>
+            </div>
+            <div class="confidence-row">
+              <span>Model confidence</span>
+              <strong id="confidence">0%</strong>
+            </div>
+            <div class="meter">
+              <i id="confidenceBar"></i>
+            </div>
+          </div>
+        </section>
+
+        <section class="modality-grid" aria-label="Modality results">
+          <article class="metric" data-kind="audio">
+            <div>
+              <span>Audio</span>
+              <strong id="audioScore">0.00</strong>
+            </div>
+            <p id="audioLevel">Idle</p>
+            <div class="meter"><i id="audioBar"></i></div>
+          </article>
+
+          <article class="metric" data-kind="video">
+            <div>
+              <span>Video</span>
+              <strong id="videoScore">0.00</strong>
+            </div>
+            <p id="videoLevel">Idle</p>
+            <div class="meter"><i id="videoBar"></i></div>
+          </article>
+
+          <article class="metric" data-kind="physio">
+            <div>
+              <span>Physio</span>
+              <strong id="physioScore">0.00</strong>
+            </div>
+            <p id="physioLevel">Dataset replay</p>
+            <div class="meter"><i id="physioBar"></i></div>
+          </article>
+        </section>
+
+        <section class="analytics">
+          <div class="chart-panel">
+            <div class="panel-heading">
+              <h3>Live trend</h3>
+              <span>Last 80 samples</span>
+            </div>
+            <canvas id="trendCanvas" width="900" height="280"></canvas>
+          </div>
+
+          <div class="weights-panel">
+            <div class="panel-heading">
+              <h3>Fusion weights</h3>
+              <span id="physioTime">--</span>
+            </div>
+            <div class="weight-row">
+              <span>Audio</span>
+              <div class="meter"><i id="audioWeight"></i></div>
+              <strong id="audioWeightText">0%</strong>
+            </div>
+            <div class="weight-row">
+              <span>Video</span>
+              <div class="meter"><i id="videoWeight"></i></div>
+              <strong id="videoWeightText">0%</strong>
+            </div>
+            <div class="weight-row">
+              <span>Physio</span>
+              <div class="meter"><i id="physioWeight"></i></div>
+              <strong id="physioWeightText">0%</strong>
+            </div>
+            <pre id="featureLog">{}</pre>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
