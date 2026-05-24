@@ -1,5 +1,11 @@
+opencv-python
+librosa
+scikit-learn
+tensorflow
+
 fastapi
 uvicorn
-pandas
 numpy
+pandas
 pydantic
+python-multipart
